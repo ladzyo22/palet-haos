@@ -93,14 +93,14 @@ const LV=[
 {n:'Кінець кварталу',mis:'Завантаж неможливе: 4+ круглих вціліло',pool:['Кавун','М’яч','Бочка'],ok:s=>cnt(s,k=>k.r)>=4},
 {n:'Аварія на підстанції',mis:'У темряві: вціліло 9+ ящиків',dark:1,pool:KINDS.map(k=>k.n),ok:s=>s.length>=9}
 ];
-const HS=[1,.82,.66,.5],FILM=[1,.82,.66,.52],COST=[0,100,220,380],STIFF=[.4,.6,.8,.95],TEAR=[12,16,22,30];
+const HS=[1,.82,.66,.5],FILM=[1,.82,.66,.52],COST=[0,100,220,380],STIFF=[.85,.92,.96,1],TEAR=[30,40,55,80];
 const RANKS=[[0,'Стажер-вантажник'],[350,'Вайзер'],[800,'Супервайзер'],[1400,'Супер-пупер вайзер']];
 let sv={money:0,rohl:0,film:0,tape:0,bribe:0,lvl:0,best:0};
 try{Object.assign(sv,JSON.parse(localStorage.getItem('pc2')||'{}'))}catch(e){}
 function save(){try{localStorage.setItem('pc2',JSON.stringify(sv))}catch(e){}}
 
 /* ---------- фізика ---------- */
-const engine=Engine.create();engine.positionIterations=10;engine.velocityIterations=8;
+const engine=Engine.create();engine.positionIterations=14;engine.velocityIterations=12;engine.constraintIterations=6;engine.gravity.scale=0.0008;
 const pallet=Bodies.rectangle(CX,PY,200,16,{density:0.5,friction:0.9,frictionStatic:1,label:'pallet'});
 const floor=Bodies.rectangle(CX,620,3000,40,{isStatic:true,label:'floor',friction:0.8});
 Composite.add(engine.world,[pallet,floor]);
@@ -124,7 +124,7 @@ function startLevel(){cons.forEach(o=>Composite.remove(engine.world,o.c));cons.l
 
 function drop(){if(state!=='play'||cool>0)return;
  const k=cur,d=dims(k,rot),w=d[0],h=d[1],x=hx(),y=96,fm=1+0.25*sv.film;
- const o={density:0.0006+k.m*0.00025,friction:(k.r?0.25:0.7)*fm+(glue?3:0),frictionStatic:glue?6:0.9*fm,restitution:glue?0:(k.r?0.25:0.05),label:'item'};
+ const o={density:0.0006+k.m*0.00025,friction:(k.r?0.7:0.9)*fm+(glue?3:0),frictionStatic:glue?6:1.2*fm,restitution:0,frictionAir:0.02,slop:0.08,label:'item'};
  const b=k.r?Bodies.circle(x,y,k.r,o):Bodies.rectangle(x,y,w,h,Object.assign({chamfer:{radius:4}},o));
  b.plugin={k:k,w:w,h:h,sup:null,calm:0,scored:false,lost:false,glue:glue,cn:0,wrapT:0};
  Composite.add(engine.world,b);items.push(b);idx++;cool=35;glue=false;hap('light');
@@ -141,19 +141,19 @@ function award(b){const p=b.plugin;p.scored=true;const s=p.sup;if(!s||s.label===
 /* стрейч: після кожного ящика обмотуємо його з тим, на чому він лежить */
 function wrapItem(b){const p=b.plugin,s=p.sup;if(p.cn>0||p.lost||!s||s.label==='floor')return;
  const hw=p.w/2,hh=p.h/2,pts=p.k.r?[[-hw*.6,hh*.55],[hw*.6,hh*.55]]:[[-hw+2,hh-1],[hw-2,hh-1]],c=Math.cos(b.angle),sn=Math.sin(b.angle),ca=Math.cos(-s.angle),sa=Math.sin(-s.angle);
- pts.forEach(q=>{const dx=b.position.x+q[0]*c-q[1]*sn-s.position.x,dy=b.position.y+q[0]*sn+q[1]*c-s.position.y;
-  const con=Constraint.create({bodyA:b,pointA:{x:q[0],y:q[1]},bodyB:s,pointB:{x:dx*ca-dy*sa,y:dx*sa+dy*ca},stiffness:STIFF[sv.film],damping:0.1,length:0});
-  cons.push({c:con,b:b});Composite.add(engine.world,con);p.cn++});
- p.wrapT=50;hap('light')}
+ [s].concat(s.plugin&&s.plugin.sup&&s.plugin.sup.label!=='floor'?[s.plugin.sup]:[]).forEach(s=>{const ca=Math.cos(-s.angle),sa=Math.sin(-s.angle);pts.forEach(q=>{const dx=b.position.x+q[0]*c-q[1]*sn-s.position.x,dy=b.position.y+q[0]*sn+q[1]*c-s.position.y;
+  const con=Constraint.create({bodyA:b,pointA:{x:q[0],y:q[1]},bodyB:s,pointB:{x:dx*ca-dy*sa,y:dx*sa+dy*ca},stiffness:STIFF[sv.film],damping:0.4,length:0});
+  cons.push({c:con,b:b});Composite.add(engine.world,con);p.cn++})});
+ b.collisionFilter.group=-1;pallet.collisionFilter.group=-1;p.wrapT=50;hap('light')}
 function tear(){for(let i=cons.length-1;i>=0;i--){const o=cons[i],c=o.c,A=c.bodyA,B=c.bodyB,
   ax=A.position.x+c.pointA.x*Math.cos(A.angle)-c.pointA.y*Math.sin(A.angle),ay=A.position.y+c.pointA.x*Math.sin(A.angle)+c.pointA.y*Math.cos(A.angle),
   bx=B.position.x+c.pointB.x*Math.cos(B.angle)-c.pointB.y*Math.sin(B.angle),by=B.position.y+c.pointB.x*Math.sin(B.angle)+c.pointB.y*Math.cos(B.angle);
- if(Math.hypot(ax-bx,ay-by)>TEAR[sv.film]){Composite.remove(engine.world,c);cons.splice(i,1);o.b.plugin.cn--;pop(A.position.x,A.position.y,'Плівка лопнула!')}}}
+ if(Math.hypot(ax-bx,ay-by)>TEAR[sv.film]){Composite.remove(engine.world,c);cons.splice(i,1);o.b.plugin.cn--;if(o.b.plugin.cn<=0)o.b.collisionFilter.group=0;pop(A.position.x,A.position.y,'Плівка лопнула!')}}}
 function startDrive(){items.forEach(b=>{b.plugin.scored=true;wrapItem(b)});state='drive';drv=0;hap('medium')}
 function startCut(){const px=pallet.position.x,svv=[];let over=0,top=PY;
  for(const b of items){if(b.position.y<PY-8&&Math.abs(b.position.x-px)<150){svv.push({k:b.plugin.k,y:b.position.y,b:b});over+=Math.max(0,Math.abs(b.position.x-px)-90);top=Math.min(top,b.position.y-b.plugin.h/2)}}
  snap={svv:svv,over:over,top:top};state='cut';wait=0;pvx=0}
-function doCut(){if(railsOn){Composite.remove(engine.world,rails);railsOn=false}cons.forEach(o=>{Composite.remove(engine.world,o.c);o.b.plugin.cn=0});cons.length=0;state='collapse';wait=0;hap('heavy')}
+function doCut(){if(railsOn){Composite.remove(engine.world,rails);railsOn=false}cons.forEach(o=>{Composite.remove(engine.world,o.c);o.b.plugin.cn=0;o.b.collisionFilter.group=0});cons.length=0;pallet.collisionFilter.group=0;state='collapse';wait=0;hap('heavy')}
 
 function finish(){state='result';
  const px=pallet.position.x,svv=snap.svv,over=snap.over,top=snap.top,fell=TOTAL-svv.length;
@@ -187,7 +187,7 @@ function share(){if(!last)return;
  try{navigator.clipboard.writeText(t)}catch(e){}}
 
 function show(h){card.innerHTML=h;ov.style.display='flex'}
-function menu(){state='menu';show('<h1>📦 Палетний хаос</h1><p>Ти комплектувальник. Склади європіддон так, щоб магазин проклинав день, коли замовив товар.</p>'
+function menu(){state='menu';show('<h1>📦 Палетний хаос</h1><p>Дай Боже кобаси, Ти комплектувальник. Склади європіддон так, щоб магазин проклинав день, коли замовив товар.</p>'
  +'<ul><li>Тап — скинути ящик, ↻ — повернути.</li><li>Важке на крихке, кругле під низ, вода першою.</li><li>Кожен ящик обмотується стрейчем. Збудуй найвищу башту: вона має доїхати до магазину і розвалитись, коли приймальник розріже плівку.</li><li>За премії прокачуй рохлю та стрейч-плівку.</li></ul>'
  +(sv.best?'<p>Рекорд: <b>'+sv.best+'</b></p>':'')
  +(sv.lvl>0?'<button data-a="cont">Продовжити (рівень '+(sv.lvl+1)+')</button><button class="sec" data-a="new">Нова кар’єра</button>':'<button data-a="new">Почати зміну</button>'))}
@@ -219,15 +219,15 @@ cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect(),x=(e.cl
 function step(){Engine.update(engine,1000/60);if(cool>0)cool--;
  if(state==='play')frame++;
  if(state!=='drive'){pvx=0;
-  for(const b of items){const p=b.plugin;if(p.scored)continue;
+  for(const b of items){const p=b.plugin;if(p.sup&&state!=='collapse'){Body.setVelocity(b,{x:b.velocity.x*(p.cn?.88:.8),y:b.velocity.y*(p.cn?.9:1)});Body.setAngularVelocity(b,b.angularVelocity*(p.cn?.85:.8))}if(p.scored)continue;
    if(b.position.y>PY+30){p.lost=true;p.scored=true;score-=30;pop(b.position.x,PY+10,'Впало! −30');continue}
-   if(Math.hypot(b.velocity.x,b.velocity.y)<0.3&&Math.abs(b.angularVelocity)<0.01)p.calm++;else p.calm=0;
-   if(p.calm>30)award(b)}
+   if(Math.hypot(b.velocity.x,b.velocity.y)<0.5&&Math.abs(b.angularVelocity)<0.02)p.calm++;else p.calm=0;
+   if(p.calm>20)award(b)}
   if(state==='settle'){wait++;if(wait>150)startDrive()}
   if(state==='cut'){wait++;if(wait>55)doCut()}
   if(state==='collapse'){wait++;if(wait>260)finish()}}
  else{drv++;const amp=(20+drv*0.2)*(1+0.1*lvl),tx=CX+amp*Math.sin(drv*0.06);pvx=tx-pallet.position.x;if(drv>270)startCut()}
- tear()}
+ if(state==='drive')tear()}
 
 function draw(){
  const g=ctx.createLinearGradient(0,0,0,600);g.addColorStop(0,'#3f5a47');g.addColorStop(1,'#587a5f');ctx.fillStyle=g;ctx.fillRect(0,0,W,600);
@@ -254,7 +254,7 @@ function draw(){
  if(state==='play'&&nxt)ctx.fillText('Далі: '+nxt.n,W-12,32);
  ctx.textAlign='center';ctx.font='bold 18px system-ui,sans-serif';
  if(state==='settle')ctx.fillText('Чекаємо, чи стоїть…',W/2,150);
- if(state==='drive')ctx.fillText('🚚 Тест-драйв до магазину!',W/2,150);if(state==='cut')ctx.fillText('✂️ Керуючий ріже стрейч…',W/2,150);if(state==='collapse')ctx.fillText('💥 Бомба!',W/2,150);
+ if(state==='drive')ctx.fillText('🚚 Тест-драйв до магазину!',W/2,150);if(state==='cut')ctx.fillText('✂️ Приймальник різає стрейч…',W/2,150);if(state==='collapse')ctx.fillText('💥 Бомба!',W/2,150);
  for(const p of pops){p.t++;ctx.globalAlpha=Math.max(0,1-p.t/80);ctx.font='bold 13px system-ui,sans-serif';ctx.textBaseline='middle';ctx.lineWidth=3;ctx.strokeStyle='#1d2a22';ctx.strokeText(p.txt,p.x,p.y-p.t*0.5);ctx.fillStyle='#ffd45a';ctx.fillText(p.txt,p.x,p.y-p.t*0.5)}
  ctx.globalAlpha=1;pops=pops.filter(p=>p.t<80)}
 

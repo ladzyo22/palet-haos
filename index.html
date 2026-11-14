@@ -104,20 +104,22 @@ const engine=Engine.create();engine.positionIterations=10;engine.velocityIterati
 const pallet=Bodies.rectangle(CX,PY,200,16,{density:0.5,friction:0.9,frictionStatic:1,label:'pallet'});
 const floor=Bodies.rectangle(CX,620,3000,40,{isStatic:true,label:'floor',friction:0.8});
 Composite.add(engine.world,[pallet,floor]);
+const rails=[-1,1].map(s=>Bodies.rectangle(CX+s*103,PY-25,6,34,{density:.5,friction:.2,inertia:Infinity,label:'rail'}));let railsOn=true;Composite.add(engine.world,rails);
 let pvx=0;const cons=[];
-Events.on(engine,'beforeUpdate',()=>{Body.setPosition(pallet,{x:pallet.position.x,y:PY});Body.setVelocity(pallet,{x:pvx,y:0});Body.setAngularVelocity(pallet,0);Body.setAngle(pallet,0)});
+Events.on(engine,'beforeUpdate',()=>{Body.setPosition(pallet,{x:pallet.position.x,y:PY});Body.setVelocity(pallet,{x:pvx,y:0});Body.setAngularVelocity(pallet,0);Body.setAngle(pallet,0);
+ if(railsOn)rails.forEach((r,i)=>{const s=i?1:-1;Body.setPosition(r,{x:pallet.position.x+s*103,y:PY-25});Body.setVelocity(r,{x:pvx,y:0});Body.setAngularVelocity(r,0);Body.setAngle(r,0)})});
 Events.on(engine,'collisionStart',e=>{for(const pr of e.pairs){const a=pr.bodyA,b=pr.bodyB;
- if(a.plugin&&a.plugin.k&&b.position.y>a.position.y+2)a.plugin.sup=b;
- if(b.plugin&&b.plugin.k&&a.position.y>b.position.y+2)b.plugin.sup=a}});
+ if(a.plugin&&a.plugin.k&&b.label!=='rail'&&b.position.y>a.position.y+2)a.plugin.sup=b;
+ if(b.plugin&&b.plugin.k&&a.label!=='rail'&&a.position.y>b.position.y+2)b.plugin.sup=a}});
 
 let snap=null,state='menu',lvl=0,frame=0,idx=0,score=0,bag=[],cur=null,nxt=null,rot=false,glue=false,cool=0,wait=0,drv=0,items=[],pops=[],last=null;
 function nextKind(){if(!bag.length)bag=LV[lvl].pool.map(n=>K[n]).sort(()=>Math.random()-.5);return bag.pop()}
 function dims(k,r){if(k.r)return[k.r*2,k.r*2];return r?[k.h,k.w]:[k.w,k.h]}
-function hx(){return CX+115*Math.sin(frame*(0.03+idx*0.0025)*HS[sv.rohl]*(1+0.07*lvl))}
+function hx(){return CX+58*Math.sin(frame*(0.03+idx*0.0025)*HS[sv.rohl]*(1+0.07*lvl))}
 function pop(x,y,t){pops.push({x:Math.max(70,Math.min(W-70,x)),y:y,t:0,txt:t})}
 
 function startLevel(){cons.forEach(o=>Composite.remove(engine.world,o.c));cons.length=0;items.forEach(b=>Composite.remove(engine.world,b));items=[];pops=[];score=0;idx=0;rot=false;glue=false;cool=0;wait=0;drv=0;frame=0;pvx=0;bag=[];
- Body.setPosition(pallet,{x:CX,y:PY});Body.setVelocity(pallet,{x:0,y:0});
+ Body.setPosition(pallet,{x:CX,y:PY});Body.setVelocity(pallet,{x:0,y:0});if(!railsOn){Composite.add(engine.world,rails);railsOn=true}
  cur=nextKind();nxt=nextKind();state='play';ov.style.display='none'}
 
 function drop(){if(state!=='play'||cool>0)return;
@@ -151,7 +153,7 @@ function startDrive(){items.forEach(b=>{b.plugin.scored=true;wrapItem(b)});state
 function startCut(){const px=pallet.position.x,svv=[];let over=0,top=PY;
  for(const b of items){if(b.position.y<PY-8&&Math.abs(b.position.x-px)<150){svv.push({k:b.plugin.k,y:b.position.y,b:b});over+=Math.max(0,Math.abs(b.position.x-px)-90);top=Math.min(top,b.position.y-b.plugin.h/2)}}
  snap={svv:svv,over:over,top:top};state='cut';wait=0;pvx=0}
-function doCut(){cons.forEach(o=>{Composite.remove(engine.world,o.c);o.b.plugin.cn=0});cons.length=0;state='collapse';wait=0;hap('heavy')}
+function doCut(){if(railsOn){Composite.remove(engine.world,rails);railsOn=false}cons.forEach(o=>{Composite.remove(engine.world,o.c);o.b.plugin.cn=0});cons.length=0;state='collapse';wait=0;hap('heavy')}
 
 function finish(){state='result';
  const px=pallet.position.x,svv=snap.svv,over=snap.over,top=snap.top,fell=TOTAL-svv.length;
@@ -234,6 +236,7 @@ function draw(){
  ctx.save();ctx.translate(pallet.position.x,pallet.position.y);
  ctx.fillStyle='#8a6638';ctx.fillRect(-95,-2,22,10);ctx.fillRect(-11,-2,22,10);ctx.fillRect(73,-2,22,10);ctx.fillRect(-100,5,200,3);
  ctx.fillStyle='#b58a52';ctx.fillRect(-100,-8,200,7);ctx.restore();
+ if(railsOn)[-1,1].forEach(s=>{const rx=pallet.position.x+s*103;ctx.fillStyle='#9a6f3a';ctx.fillRect(rx-3,PY-42,6,34);ctx.strokeStyle='rgba(50,30,10,.8)';ctx.lineWidth=1.2;ctx.strokeRect(rx-3,PY-42,6,34);ctx.fillStyle='#c9a064';ctx.fillRect(rx-3,PY-42,6,4)});
  let mnx=999,mxx=-999,mny=PY;
  for(const b of items){const p=b.plugin;drawItem(p.k,p.w,p.h,b.position.x,b.position.y,b.angle,p.glue,p);if(p.wrapT>0){p.wrapT--;ctx.fillStyle='rgba(255,255,255,'+p.wrapT/50+')';ctx.fillRect(b.position.x-p.w/2-16,b.position.y-3,p.w+32,6)}if(b.position.y<PY-8)mny=Math.min(mny,b.position.y-p.h/2)}
  const hcm=Math.max(0,Math.round((PY-8-mny)/2.5));
@@ -251,7 +254,7 @@ function draw(){
  if(state==='play'&&nxt)ctx.fillText('Далі: '+nxt.n,W-12,32);
  ctx.textAlign='center';ctx.font='bold 18px system-ui,sans-serif';
  if(state==='settle')ctx.fillText('Чекаємо, чи стоїть…',W/2,150);
- if(state==='drive')ctx.fillText('🚚 Тест-драйв до магазину!',W/2,150);if(state==='cut')ctx.fillText('✂️ Приймальник різає стрейч…',W/2,150);if(state==='collapse')ctx.fillText('💥 Лавина!',W/2,150);
+ if(state==='drive')ctx.fillText('🚚 Тест-драйв до магазину!',W/2,150);if(state==='cut')ctx.fillText('✂️ Керуючий ріже стрейч…',W/2,150);if(state==='collapse')ctx.fillText('💥 Бомба!',W/2,150);
  for(const p of pops){p.t++;ctx.globalAlpha=Math.max(0,1-p.t/80);ctx.font='bold 13px system-ui,sans-serif';ctx.textBaseline='middle';ctx.lineWidth=3;ctx.strokeStyle='#1d2a22';ctx.strokeText(p.txt,p.x,p.y-p.t*0.5);ctx.fillStyle='#ffd45a';ctx.fillText(p.txt,p.x,p.y-p.t*0.5)}
  ctx.globalAlpha=1;pops=pops.filter(p=>p.t<80)}
 
